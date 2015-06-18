@@ -1,6 +1,9 @@
 package com.layer.quick_start_android;
 
+import android.app.Activity;
 import android.graphics.Color;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -37,9 +40,11 @@ import java.util.Random;
  * Handles the conversation between the pre-defined participants (Device, Emulator) and displays
  * messages in the GUI.
  */
-public class ConversationViewController implements View.OnClickListener, LayerChangeEventListener.MainThread, TextWatcher, LayerTypingIndicatorListener, LayerSyncListener {
+public class ConversationViewController implements View.OnClickListener, LayerChangeEventListener.MainThread,
+        TextWatcher, LayerTypingIndicatorListener, LayerSyncListener, MessageQueryAdapter.MessageClickHandler {
 
     private LayerClient layerClient;
+    private Activity mainActivity;
 
     //GUI elements
     private Button sendButton;
@@ -49,18 +54,23 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
     private LinearLayout conversationView;
     private TextView typingIndicator;
 
+    //The Query Adapter that grabs all Messages and displays them based on their Position
+    private MessageQueryAdapter mMessagesAdapter;
+
     //List of all users currently typing
     private ArrayList<String> typingUsers;
 
     //Current conversation
     private Conversation activeConversation;
 
-    //All messages
-    private Hashtable<String, MessageView> allMessages;
+    //This is the view that contains all the messages
+    private RecyclerView mMessagesView;
+
 
     public ConversationViewController(MainActivity ma, LayerClient client) {
 
-        //Cache off LayerClient
+        //Cache the passed in parameters
+        mainActivity = ma;
         layerClient = client;
 
         //When conversations/messages change, capture them
@@ -79,6 +89,7 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         conversationScroll = (ScrollView) ma.findViewById(R.id.scrollView);
         conversationView = (LinearLayout) ma.findViewById(R.id.conversation);
         typingIndicator = (TextView) ma.findViewById(R.id.typingIndicator);
+        mMessagesView = (RecyclerView) ma.findViewById(R.id.mRecyclerView);
 
         //Capture user input
         sendButton.setOnClickListener(this);
@@ -86,15 +97,43 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         userInput.setText(getInitialMessage());
         userInput.addTextChangedListener(this);
 
+        if(activeConversation != null)
+            getTopBarMetaData();
+
+        //Create the appropriate RecyclerView
+        RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(ma, LinearLayoutManager.VERTICAL, false);
+        mMessagesView.setLayoutManager(layoutManager);
+
         //If there is an active conversation between the Device, Simulator, and Dashboard (web client), cache it
         activeConversation = getConversation();
 
-        //If there is an active conversation, draw it
-        drawConversation();
-
         if(activeConversation != null)
-            getTopBarMetaData();
+            createMessagesAdapter();
     }
+
+    private void createMessagesAdapter(){
+
+        //The Query Adapter drives the RecyclerView, and handles all the heavy lifting of checking
+        // for new Messages, and updating the RecyclerView
+        mMessagesAdapter = new MessageQueryAdapter(mainActivity.getApplicationContext(), layerClient,
+            mMessagesView, activeConversation, this, new QueryAdapter.Callback() {
+
+            public void onItemInserted() {
+                //When a new item is inserted into the RecyclerView, scroll to the bottom so the
+                // most recent Message is always displayed
+                mMessagesView.smoothScrollToPosition(Integer.MAX_VALUE);
+            }
+        });
+        mMessagesView.setAdapter(mMessagesAdapter);
+
+        //Execute the Query
+        mMessagesAdapter.refresh();
+
+        //Start by scrolling to the bottom (newest Message)
+        mMessagesView.smoothScrollToPosition(Integer.MAX_VALUE);
+    }
+
+
 
     //Create a new message and send it
     private void sendButtonClicked(){
@@ -106,6 +145,7 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
             //If there isn't, create a new conversation with those participants
             if(activeConversation == null){
                 activeConversation = layerClient.newConversation(MainActivity.getAllParticipants());
+                createMessagesAdapter();
             }
         }
 
@@ -133,18 +173,6 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
             activeConversation.send(message);
     }
 
-    //Create a random color and apply it to the Layer logo bar
-    private void topBarClicked(){
-
-        Random r = new Random();
-        float red = r.nextFloat();
-        float green = r.nextFloat();
-        float blue = r.nextFloat();
-
-        setTopBarMetaData(red, green, blue);
-        setTopBarColor(red, green, blue);
-    }
-
     //Checks to see if there is already a conversation between the device and emulator
     private Conversation getConversation(){
 
@@ -164,53 +192,38 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         return activeConversation;
     }
 
-    //Redraws the conversation window in the GUI
-    private void drawConversation(){
-
-        //Only proceed if there is a valid conversation
-        if(activeConversation != null) {
-
-            //Clear the GUI first and empty the list of stored messages
-            conversationView.removeAllViews();
-            allMessages = new Hashtable<String, MessageView>();
-
-            //Grab all the messages from the conversation and add them to the GUI
-            List<Message> allMsgs = layerClient.getMessages(activeConversation);
-            for (int i = 0; i < allMsgs.size(); i++) {
-                addMessageToView(allMsgs.get(i));
-            }
-
-            //After redrawing, force the scroll view to the bottom (most recent message)
-            conversationScroll.post(new Runnable() {
-                @Override
-                public void run() {
-                    conversationScroll.fullScroll(View.FOCUS_DOWN);
-                }
-            });
-        }
+    public static String getInitialMessage(){
+        return "Hey, everyone! This is your friend, " + MainActivity.getUserID();
     }
 
-    //Creates a GUI element (header and body) for each Message
-    private void addMessageToView(Message msg){
+    //================================================================================
+    // MessageQueryAdapter.MessageClickHandler methods
+    //================================================================================
 
-        //Make sure the message is valid
-        if(msg == null)
-            return;
+    //You can choose to present additional options when a Message is tapped
+    public void onMessageClick(Message message) {
 
-        //Once the message has been displayed, we mark it as read
-        //NOTE: the sender of a message CANNOT mark their own message as read
-        if(!msg.getSender().getUserId().equalsIgnoreCase(layerClient.getAuthenticatedUserId()))
-            msg.markAsRead();
+    }
 
-        //Grab the message id
-        String msgId = msg.getId().toString();
+    //You can choose to present additional options when a Message is long tapped
+    public boolean onMessageLongClick(Message message) {
+        return false;
+    }
 
-        //If we have already added this message to the GUI, skip it
-        if(!allMessages.contains(msgId)) {
-            //Build the GUI element and save it
-            MessageView msgView = new MessageView(conversationView, msg);
-            allMessages.put(msgId, msgView);
-        }
+    //================================================================================
+    // Metadata methods
+    //================================================================================
+
+    //Create a random color and apply it to the Layer logo bar
+    private void topBarClicked(){
+
+        Random r = new Random();
+        float red = r.nextFloat();
+        float green = r.nextFloat();
+        float blue = r.nextFloat();
+
+        setTopBarMetaData(red, green, blue);
+        setTopBarColor(red, green, blue);
     }
 
     //Stores RGB values in the conversation's metadata
@@ -257,10 +270,6 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         if(topBar != null) {
             topBar.setBackgroundColor(Color.argb(255, (int)(255.0f * red), (int)(255.0f * green), (int)(255.0f * blue)));
         }
-    }
-
-    public static String getInitialMessage(){
-        return "Hey, everyone! This is your friend, " + MainActivity.getUserID();
     }
 
 
@@ -323,13 +332,6 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
                 }
             }
         }
-
-        //If we don't have an active conversation, grab the oldest one
-        if(activeConversation == null)
-            activeConversation = getConversation();
-
-        //If anything in the conversation changes, re-draw it in the GUI
-        drawConversation();
 
         //Check the meta-data for color changes
         getTopBarMetaData();

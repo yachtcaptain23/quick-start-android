@@ -38,10 +38,10 @@
                 android:layout_margin="5dp" />
         </LinearLayout>
 
-        <ScrollView
+        <LinearLayout
+            android:orientation="vertical"
             android:layout_width="fill_parent"
             android:layout_height="fill_parent"
-            android:id="@+id/scrollView"
             android:layout_weight="1"
             android:padding="8dp"
             android:paddingLeft="8dp"
@@ -49,12 +49,13 @@
             android:paddingRight="8dp"
             android:paddingBottom="8dp">
 
-            <LinearLayout
-                android:orientation="vertical"
-                android:layout_width="fill_parent"
-                android:layout_height="fill_parent"
-                android:id="@+id/conversation"></LinearLayout>
-        </ScrollView>
+            <view
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                class="android.support.v7.widget.RecyclerView"
+                android:id="@+id/mRecyclerView"
+                android:layout_gravity="center_horizontal" />
+        </LinearLayout>
 
         <LinearLayout
             android:orientation="vertical"
