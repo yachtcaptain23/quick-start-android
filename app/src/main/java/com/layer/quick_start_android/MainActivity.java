@@ -23,12 +23,20 @@
 package com.layer.quick_start_android;
 
 import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 
 import com.layer.sdk.LayerClient;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 
@@ -46,6 +54,7 @@ public class MainActivity extends ActionBarActivity {
     // users will not receive Notifications when the app is closed or in the
     // background).
     public static String GCM_Project_Number = "00000";
+    private static Uri sCurrentPhotoUri;
 
 
     //Global variables used to manage the Layer Client and the conversations in this app
@@ -194,4 +203,69 @@ public class MainActivity extends ActionBarActivity {
             }
         }
     }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
+        if (!(data == null)) {
+            super.onActivityResult(requestCode, resultCode, data);
+            galleryPhoto(data.getData());
+        }
+
+    }
+
+    public void galleryPhoto(Uri imageUri) {
+        byte[] bytes = getJpeg(imageUri, 100);
+        if (bytes == null) {
+            return ;
+        }
+        conversationView.sendPhotoMessage(bytes);
+        return ;
+    }
+
+    private byte[] getJpeg(Uri imageUri, final int quality) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(imageUri);
+            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+            if (bitmap == null) {
+                return null;
+            }
+
+            // Turn the byte stream into a byte array
+            ByteArrayOutputStream stream = new ByteArrayOutputStream();
+
+            // Resize
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream);
+            byte[] jpeg = stream.toByteArray();
+            stream.close();
+            bitmap.recycle();
+            System.gc();
+            return jpeg;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public void clearMessagesAlert() {
+
+        AlertDialog.Builder alert2 = new AlertDialog.Builder(MainActivity.this);
+        alert2.setMessage("Are you sure you would like to clear your messages?" );
+        alert2.setCancelable(true);
+        alert2.setPositiveButton("Yes",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        conversationView.deleteMessages();
+                    }
+                });
+        alert2.setNegativeButton("No",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        alert2.show();
+    }
+
 }

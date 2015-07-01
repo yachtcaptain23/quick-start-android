@@ -1,14 +1,21 @@
 package com.layer.quick_start_android;
 
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.content.Intent;
 
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.changes.LayerChange;
@@ -20,6 +27,7 @@ import com.layer.sdk.listeners.LayerTypingIndicatorListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
+import com.layer.sdk.messaging.MessageOptions;
 import com.layer.sdk.messaging.MessagePart;
 import com.layer.sdk.query.Predicate;
 import com.layer.sdk.query.Query;
@@ -33,21 +41,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+
 /**
  * Handles the conversation between the pre-defined participants (Device, Emulator) and displays
  * messages in the GUI.
  */
-public class ConversationViewController implements View.OnClickListener, LayerChangeEventListener.MainThread, TextWatcher, LayerTypingIndicatorListener, LayerSyncListener {
+public class ConversationViewController extends Activity implements View.OnClickListener, LayerChangeEventListener.MainThread, TextWatcher, LayerTypingIndicatorListener, LayerSyncListener {
 
-    private LayerClient layerClient;
+    public static LayerClient layerClient;
 
     //GUI elements
     private Button sendButton;
-    private LinearLayout topBar;
+    private RelativeLayout topBar;
     private EditText userInput;
     private ScrollView conversationScroll;
     private LinearLayout conversationView;
     private TextView typingIndicator;
+    private Button clearButton;
+    private Button cameraButton;
+    private Button announcementButton;
+    private MainActivity mainActivity;
+    private float red;
+    private float green;
+    private float blue;
+    private static final int PICK_IMAGE = 1;
 
     //List of all users currently typing
     private ArrayList<String> typingUsers;
@@ -58,7 +75,7 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
     //All messages
     private Hashtable<String, MessageView> allMessages;
 
-    public ConversationViewController(MainActivity ma, LayerClient client) {
+    public ConversationViewController (MainActivity ma, LayerClient client)  {
 
         //Cache off LayerClient
         layerClient = client;
@@ -74,18 +91,25 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
 
         //Cache off gui objects
         sendButton = (Button) ma.findViewById(R.id.send);
-        topBar = (LinearLayout)ma.findViewById(R.id.topbar);
+        topBar = (RelativeLayout)ma.findViewById(R.id.topbar);
         userInput = (EditText) ma.findViewById(R.id.input);
         conversationScroll = (ScrollView) ma.findViewById(R.id.scrollView);
         conversationView = (LinearLayout) ma.findViewById(R.id.conversation);
         typingIndicator = (TextView) ma.findViewById(R.id.typingIndicator);
+        clearButton = (Button) ma.findViewById(R.id.ClearButton);
+        cameraButton = (Button) ma.findViewById(R.id.CameraButton);
+        announcementButton = (Button) ma.findViewById(R.id.announcementsButton);
 
         //Capture user input
         sendButton.setOnClickListener(this);
         topBar.setOnClickListener(this);
         userInput.setText(getInitialMessage());
         userInput.addTextChangedListener(this);
+        clearButton.setOnClickListener(this);
+        cameraButton.setOnClickListener(this);
+        announcementButton.setOnClickListener(this);
 
+        this.mainActivity = ma;
         //If there is an active conversation between the Device, Simulator, and Dashboard (web client), cache it
         activeConversation = getConversation();
 
@@ -123,23 +147,38 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         //Creates and returns a new message object with the given conversation and array of message parts
         Message message = layerClient.newMessage(Arrays.asList(messagePart));
 
+        MessageOptions options = new MessageOptions();
+        //options.pushNotificationMessage("layer-push-message", MainActivity.getUserID() + ": " + text);
+
         //Formats the push notification that the other participants will receive
         Map<String, String> metadata = new HashMap<>();
-        metadata.put("layer-push-message", MainActivity.getUserID() + ": " + text);
-        message.setMetadata(metadata);
+
+        //metadata.put();
+        //message.setMetadata(metadata);
 
         //Sends the message
         if(activeConversation != null)
             activeConversation.send(message);
     }
 
+    public void sendPhotoMessage(byte[] jpeg){
+
+        Message message = layerClient.newMessage(Arrays.asList(layerClient.newMessagePart("image/jpeg", jpeg)));
+
+        if (activeConversation != null)
+        {
+            activeConversation.send(message);
+        }
+
+    }
+
     //Create a random color and apply it to the Layer logo bar
     private void topBarClicked(){
 
         Random r = new Random();
-        float red = r.nextFloat();
-        float green = r.nextFloat();
-        float blue = r.nextFloat();
+        red = r.nextFloat();
+        green = r.nextFloat();
+        blue = r.nextFloat();
 
         setTopBarMetaData(red, green, blue);
         setTopBarColor(red, green, blue);
@@ -242,9 +281,9 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
 
                 if(colors != null) {
 
-                    float red = Float.parseFloat((String)colors.get("red"));
-                    float green = Float.parseFloat((String)colors.get("green"));
-                    float blue = Float.parseFloat((String)colors.get("blue"));
+                    red = Float.parseFloat((String)colors.get("red"));
+                    green = Float.parseFloat((String)colors.get("green"));
+                    blue = Float.parseFloat((String)colors.get("blue"));
 
                     setTopBarColor(red, green, blue);
                 }
@@ -278,7 +317,54 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         if(v == topBar){
             topBarClicked();
         }
+
+        //Clear button clicked
+        if (v == clearButton){
+            this.mainActivity.clearMessagesAlert();
+        }
+
+        //Camera button clicked
+        if (v == cameraButton) {
+
+            Intent pickPhoto = new Intent(Intent.ACTION_PICK,
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            startActivityForResult(pickPhoto, PICK_IMAGE);
+
+        }
+
+        if (v == announcementButton) {
+            Intent intent = new Intent(mainActivity, DisplayAnnouncementActivity.class);
+            Bundle b = new Bundle();
+            b.putFloat("Red",red);
+            b.putFloat("Green", green);
+            b.putFloat("Blue", blue);
+            intent.putExtras(b);
+            mainActivity.startActivity(intent);
+        }
+
     }
+
+    public void startActivityForResult(Intent photoPickerIntent, int i) {
+        mainActivity.startActivityForResult(photoPickerIntent, i);
+
+    }
+
+    public void deleteMessages() {
+        Query query = Query.builder(Message.class)
+                .predicate(new Predicate(Message.Property.CONVERSATION, Predicate.Operator.EQUAL_TO, getConversation()))
+                .sortDescriptor(new SortDescriptor(Message.Property.SENT_AT, SortDescriptor.Order.DESCENDING))
+                .build();
+        List<Message> allMessages = layerClient.executeQuery(query, Query.ResultType.OBJECTS);
+        System.out.print("MESSAGE: " );
+        System.out.print(allMessages);
+
+        for (int i = 0; i < allMessages.size(); i++)
+            allMessages.get(i).delete(LayerClient.DeletionMode.ALL_PARTICIPANTS);
+    }
+
+
+
+
 
     //================================================================================
     // LayerChangeEventListener methods

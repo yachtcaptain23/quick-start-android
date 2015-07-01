@@ -3,19 +3,23 @@
     package="com.layer.quick_start_android" >
 
     <!-- Layer SDK uses these for monitoring network state and receiving GCM -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <uses-permission android:name="android.permission.GET_ACCOUNTS"/>
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" />
 
     <!-- GCM permission for your app -->
     <permission
         android:name="com.layer.quick_start_android.permission.C2D_MESSAGE"
-        android:protectionLevel="signature"/>
-    <uses-permission android:name="com.layer.quick_start_android.permission.C2D_MESSAGE"/>
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.layer.quick_start_android.permission.C2D_MESSAGE" />
 
     <application
         android:allowBackup="true"
@@ -33,37 +37,42 @@
         </activity>
 
         <!-- Layer SDK has these for monitoring network, boot, and GCM -->
-        <receiver android:name="com.layer.sdk.services.LayerReceiver">
+        <receiver android:name="com.layer.sdk.services.LayerReceiver" >
             <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_CHANGE"/>
-                <action android:name="android.intent.action.ANY_DATA_STATE"/>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+                <action android:name="android.intent.action.ANY_DATA_STATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
-
         <receiver
             android:name="com.layer.sdk.services.GcmBroadcastReceiver"
-            android:permission="com.google.android.c2dm.permission.SEND">
+            android:permission="com.google.android.c2dm.permission.SEND" >
             <intent-filter>
-                <action android:name="com.google.android.c2dm.intent.RECEIVE"/>
-                <category android:name="com.layer.quick_start_android"/>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+
+                <category android:name="com.layer.quick_start_android" />
             </intent-filter>
         </receiver>
-
-        <receiver android:name=".LayerPushReceiver">
+        <receiver android:name=".LayerPushReceiver" >
             <intent-filter>
-                <action android:name="com.layer.sdk.PUSH"/>
-                <category android:name="com.layer.quick_start_android"/>
+                <action android:name="com.layer.sdk.PUSH" />
+
+                <category android:name="com.layer.quick_start_android" />
             </intent-filter>
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <category android:name="com.layer.quick_start_android"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+
+                <category android:name="com.layer.quick_start_android" />
             </intent-filter>
         </receiver>
 
         <!-- For GCM Push Notifications -->
-        <service android:name="com.layer.sdk.services.GcmIntentService"/>
+        <service android:name="com.layer.sdk.services.GcmIntentService" />
 
+        <activity
+            android:name=".DisplayAnnouncementActivity"
+            android:label="@string/title_activity_display_announcement" >
+        </activity>
     </application>
 
 </manifest>
