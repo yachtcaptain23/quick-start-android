@@ -23,6 +23,7 @@ import com.layer.sdk.listeners.LayerTypingIndicatorListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
+import com.layer.sdk.messaging.MessageOptions;
 import com.layer.sdk.messaging.MessagePart;
 import com.layer.sdk.query.Predicate;
 import com.layer.sdk.query.Query;
@@ -31,7 +32,6 @@ import com.layer.sdk.query.SortDescriptor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -87,7 +87,6 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         topBar = (LinearLayout)ma.findViewById(R.id.topbar);
         userInput = (EditText) ma.findViewById(R.id.input);
         conversationScroll = (ScrollView) ma.findViewById(R.id.scrollView);
-        conversationView = (LinearLayout) ma.findViewById(R.id.conversation);
         typingIndicator = (TextView) ma.findViewById(R.id.typingIndicator);
         mMessagesView = (RecyclerView) ma.findViewById(R.id.mRecyclerView);
 
@@ -160,13 +159,11 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
         //Put the user's text into a message part, which has a MIME type of "text/plain" by default
         MessagePart messagePart = layerClient.newMessagePart(text);
 
-        //Creates and returns a new message object with the given conversation and array of message parts
-        Message message = layerClient.newMessage(Arrays.asList(messagePart));
+        MessageOptions msgOptions = new MessageOptions();
+        msgOptions.pushNotificationMessage(MainActivity.getUserID() + ": " + text);
 
-        //Formats the push notification that the other participants will receive
-        Map<String, String> metadata = new HashMap<>();
-        metadata.put("layer-push-message", MainActivity.getUserID() + ": " + text);
-        message.setMetadata(metadata);
+        //Creates and returns a new message object with the given conversation and array of message parts
+        Message message = layerClient.newMessage(msgOptions, Arrays.asList(messagePart));
 
         //Sends the message
         if(activeConversation != null)
@@ -294,6 +291,12 @@ public class ConversationViewController implements View.OnClickListener, LayerCh
     //================================================================================
 
     public void onEventMainThread(LayerChangeEvent event) {
+
+        if(activeConversation == null) {
+            activeConversation = getConversation();
+            if(activeConversation != null)
+                createMessagesAdapter();
+        }
 
         //You can choose to handle changes to conversations or messages however you'd like:
         List<LayerChange> changes = event.getChanges();

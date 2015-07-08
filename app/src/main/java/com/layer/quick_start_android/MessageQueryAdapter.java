@@ -2,20 +2,25 @@ package com.layer.quick_start_android;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.support.v7.widget.RecyclerView;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Message;
+import com.layer.sdk.messaging.MessagePart;
 import com.layer.sdk.query.Predicate;
 import com.layer.sdk.query.Query;
 import com.layer.sdk.query.SortDescriptor;
+
+import java.io.UnsupportedEncodingException;
+import java.text.SimpleDateFormat;
 
 /*
  * MessageQueryAdapter.java
@@ -54,9 +59,6 @@ public class MessageQueryAdapter extends QueryAdapter<Message, MessageQueryAdapt
             extends RecyclerView.ViewHolder
             implements View.OnClickListener, View.OnLongClickListener {
 
-        public TextView sender;
-        public TextView time;
-        public TextView content;
         public Message message;
         public LinearLayout contentLayout;
         public final MessageClickHandler messageClickHandler;
@@ -98,15 +100,12 @@ public class MessageQueryAdapter extends QueryAdapter<Message, MessageQueryAdapt
     //When a Message is added to this conversation, a new ViewHolder is created
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup, int viewType) {
 
-        //The message_item is just an example view you can use to display each message in a list
-        View itemView = mInflater.inflate(R.layout.message_item, mParentView, false);
+        //The layout_message is just an example view you can use to display each message in a list
+        View itemView = mInflater.inflate(R.layout.layout_message, mParentView, false);
 
         //Tie the view elements to the fields in the actual view after it has been created
         ViewHolder holder = new ViewHolder(itemView, mMessageClickHandler);
-        holder.sender = (TextView) itemView.findViewById(R.id.senderID);
-        holder.content = (TextView) itemView.findViewById(R.id.msgContent);
-        holder.time = (TextView) itemView.findViewById(R.id.sendTime);
-        holder.contentLayout = (LinearLayout) itemView.findViewById(R.id.contentLayout);
+        holder.contentLayout = (LinearLayout) itemView.findViewById(R.id.msg_content);
 
         return holder;
     }
@@ -123,25 +122,135 @@ public class MessageQueryAdapter extends QueryAdapter<Message, MessageQueryAdapt
         if(message != null)
             senderId = message.getSender().getUserId();
 
-        //Set the content of the message, sender, and received time
-        viewHolder.content.setText(LayerImpl.getMessageText(message));
-        viewHolder.sender.setText(ParseImpl.getUsername(senderId));
-        viewHolder.time.setText(LayerImpl.getReceivedAtTime(message));
-        viewHolder.message = message;
+        Context msgContext = viewHolder.contentLayout.getContext();
 
-        //Right align if the authenticated user (local user) sent the message, otherwise left align
-        // the message box
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.weight = 1.0f;
-        if(message != null && !senderId.equals(LayerImpl.getLayerClient().getAuthenticatedUserId())) {
-            params.gravity = Gravity.LEFT;
-            viewHolder.contentLayout.setBackgroundColor(Color.YELLOW);
-        } else {
-            params.gravity = Gravity.RIGHT;
-            viewHolder.contentLayout.setBackgroundColor(Color.CYAN);
+        //The first part of each message will include the sender and status
+        LinearLayout messageDetails = new LinearLayout(msgContext);
+        messageDetails.setOrientation(LinearLayout.HORIZONTAL);
+        viewHolder.contentLayout.addView(messageDetails);
+
+        //Creates the sender text view, sets the text to be italic, and attaches it to the parent
+        TextView senderTV = new TextView(msgContext);
+        senderTV.setText(craftSenderText(message));
+        senderTV.setTypeface(null, Typeface.ITALIC);
+        senderTV.setTextColor(Color.DKGRAY);
+        messageDetails.addView(senderTV);
+
+        //The status is displayed with an icon, depending on whether the message has been read, delivered, or sent
+        ImageView statusImage = createStatusImage(msgContext, message);
+        messageDetails.addView(statusImage);
+
+        //Creates the message text or image view and attaches it to the parent
+        View messageTV = craftMessageContent(msgContext, message);
+        viewHolder.contentLayout.addView(messageTV);
+    }
+
+    private String craftSenderText(Message msg){
+        //The User ID
+        String senderTxt = msg.getSender().getUserId();
+
+        //Add the timestamp
+        if(msg.getSentAt() != null) {
+            senderTxt += " @ " + new SimpleDateFormat("HH:mm:ss").format(msg.getReceivedAt());
         }
-        viewHolder.contentLayout.setLayoutParams(params);
 
+        //Add some formatting before the status icon
+        senderTxt += "   ";
+
+        //Return the formatted text
+        return senderTxt;
+    }
+
+    private ImageView createStatusImage(Context msgContext, Message msg){
+        ImageView status = new ImageView(msgContext);
+
+        switch(getMessageStatus(msg)){
+
+            case SENT:
+                status.setImageResource(R.drawable.sent);
+                break;
+
+            case DELIVERED:
+                status.setImageResource(R.drawable.delivered);
+                break;
+
+            case READ:
+                status.setImageResource(R.drawable.read);
+                break;
+        }
+
+        //Have the icon fill the space vertically
+        status.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
+
+        return status;
+    }
+
+    //Checks the recipient status of the message (based on all participants)
+    private Message.RecipientStatus getMessageStatus(Message msg) {
+
+        //If we didn't send the message, we already know the status - we have read it
+        if (!msg.getSender().getUserId().equalsIgnoreCase(MainActivity.getUserID()))
+            return Message.RecipientStatus.READ;
+
+        //Assume the message has been sent
+        Message.RecipientStatus status = Message.RecipientStatus.SENT;
+
+        //Go through each user to check the status, in this case we check each user and prioritize so
+        // that we return the highest status: Sent -> Delivered -> Read
+        for (int i = 0; i < MainActivity.getAllParticipants().size(); i++) {
+
+            //Don't check the status of the current user
+            String participant = MainActivity.getAllParticipants().get(i);
+            if (participant.equalsIgnoreCase(MainActivity.getUserID()))
+                continue;
+
+            if (status == Message.RecipientStatus.SENT) {
+
+                if (msg.getRecipientStatus(participant) == Message.RecipientStatus.DELIVERED)
+                    status = Message.RecipientStatus.DELIVERED;
+
+                if (msg.getRecipientStatus(participant) == Message.RecipientStatus.READ)
+                    return Message.RecipientStatus.READ;
+
+            } else if (status == Message.RecipientStatus.DELIVERED) {
+                if (msg.getRecipientStatus(participant) == Message.RecipientStatus.READ)
+                    return Message.RecipientStatus.READ;
+            }
+        }
+
+        return status;
+    }
+
+    private View craftMessageContent(Context msgContext, Message msg){
+
+        LinearLayout messageContent = new LinearLayout(msgContext);
+        messageContent.setOrientation(LinearLayout.VERTICAL);
+
+        for(MessagePart part : msg.getMessageParts()){
+            switch(part.getMimeType()) {
+                case "text/plain":
+                    String content = getPlainText(part.getData());
+                    TextView messageTV = new TextView(msgContext);
+                    messageTV.setText(content);
+                    messageTV.setTextColor(Color.BLACK);
+                    messageContent.addView(messageTV);
+                    break;
+            }
+
+        }
+
+        return messageContent;
+    }
+
+    private String getPlainText(byte[] data){
+
+        try {
+            return new String(data, "UTF-8") + "\n";
+        } catch (UnsupportedEncodingException e) {
+
+        }
+
+        return "";
     }
 
     //This example app only has one kind of Message type, but you could support different types
